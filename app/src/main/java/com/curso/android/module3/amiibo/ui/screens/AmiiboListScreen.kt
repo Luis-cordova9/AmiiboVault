@@ -41,6 +41,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,9 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -73,7 +73,10 @@ import com.curso.android.module3.amiibo.data.local.entity.AmiiboEntity
 import com.curso.android.module3.amiibo.domain.error.ErrorType
 import com.curso.android.module3.amiibo.ui.viewmodel.AmiiboUiState
 import com.curso.android.module3.amiibo.ui.viewmodel.AmiiboViewModel
+import com.curso.android.module3.amiibo.ui.viewmodel.AmiiboUiEvent
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.material3.SnackbarHostState
+
 
 /**
  * ============================================================================
@@ -109,6 +112,7 @@ import org.koin.androidx.compose.koinViewModel
  *
  * ============================================================================
  */
+
 
 /**
  * Pantalla principal que muestra la lista de Amiibos.
@@ -146,7 +150,27 @@ fun AmiiboListScreen(
     // Estado para el dropdown del tamaño de página
     var showPageSizeDropdown by remember { mutableStateOf(false) }
 
+    val snackbarHostState = remember{SnackbarHostState()}
+
+
+    LaunchedEffect(Unit) { // ver eventos
+        viewModel.events.collect { event ->
+            when (event) {
+                is AmiiboUiEvent.ShowSnackbar -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.message,
+                        actionLabel = if (event.showRetry) "Reintentar" else null
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.refreshAmiibos()
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             /**
              * TopAppBar de Material 3.
@@ -220,6 +244,7 @@ fun AmiiboListScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
+
         }
     ) { paddingValues ->
         /**
@@ -307,12 +332,7 @@ fun AmiiboListScreen(
                 if (state.cachedAmiibos.isNotEmpty()) {
                     // Hay datos en cache: mostrar datos + mensaje de error
                     Column(modifier = Modifier.padding(paddingValues)) {
-                        ErrorBanner(
-                            message = state.message,
-                            errorType = state.errorType,
-                            isRetryable = state.isRetryable,
-                            onRetry = { viewModel.refreshAmiibos() }
-                        )
+
                         AmiiboGrid(
                             amiibos = state.cachedAmiibos,
                             onAmiiboClick = onAmiiboClick,

@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * ============================================================================
@@ -143,10 +145,22 @@ sealed interface AmiiboUiState {
  *
  * ============================================================================
  */
+
+
+sealed interface AmiiboUiEvent { // nuevo sealed para los eventos del ui
+    data class ShowSnackbar(
+        val message: String,
+        val showRetry: Boolean
+    ) : AmiiboUiEvent
+}
+
+
 class AmiiboViewModel(
     private val repository: AmiiboRepository
 ) : ViewModel() {
 
+    val _events = MutableSharedFlow<AmiiboUiEvent>() // añadir el sharedflow
+    val events = _events.asSharedFlow()
     /**
      * Estado interno mutable.
      * Solo el ViewModel puede modificar este estado.
@@ -240,6 +254,9 @@ class AmiiboViewModel(
      * init { } se ejecuta cuando se crea el ViewModel.
      * Aquí configuramos la observación de datos y cargamos inicialmente.
      */
+
+    private var cachedFromDb : List<AmiiboEntity> = emptyList()
+
     init {
         // Observar cambios en la base de datos
         observeDatabaseChanges()
@@ -259,12 +276,14 @@ class AmiiboViewModel(
         viewModelScope.launch {
             amiibosFromDb.collect { amiibos ->
                 // Solo actualiza a Success si hay datos o no estamos en Loading inicial
-                val currentState = _uiState.value
+
                 if (amiibos.isNotEmpty()) {
+
+                    cachedFromDb = amiibos
+
                     _uiState.value = AmiiboUiState.Success(
                         amiibos = amiibos,
-                        isRefreshing = currentState is AmiiboUiState.Success &&
-                                (currentState as? AmiiboUiState.Success)?.isRefreshing == true
+                        isRefreshing = false
                     )
                 }
             }
@@ -404,16 +423,16 @@ class AmiiboViewModel(
     fun refreshAmiibos() {
         viewModelScope.launch {
             // Determinar estado durante la carga
-            val currentAmiibos = _loadedAmiibos.value
-            if (currentAmiibos.isEmpty()) {
+            val cachedAmiibos = cachedFromDb
+
+            if (cachedAmiibos.isNotEmpty()) {
                 // No hay cache, mostrar loading
-                _uiState.value = AmiiboUiState.Loading
-            } else {
-                // Hay cache, mostrar datos con indicador de refresh
                 _uiState.value = AmiiboUiState.Success(
-                    amiibos = currentAmiibos,
-                    isRefreshing = true
+                amiibos = cachedAmiibos,
+                isRefreshing = true
+
                 )
+
             }
 
             try {
@@ -431,7 +450,7 @@ class AmiiboViewModel(
                     isRefreshing = false
                 )
 
-            } catch (e: AmiiboError) {
+            } catch (e: AmiiboError.Network) {
                 /**
                  * MANEJO DE ERRORES TIPADOS
                  * -------------------------
@@ -445,23 +464,31 @@ class AmiiboViewModel(
                  * - Si es del servidor (Parse) → esperar y reintentar después
                  * - Si es local (Database) → reiniciar app o liberar espacio
                  */
-                val cachedAmiibos = _loadedAmiibos.value
-                val errorType = ErrorType.from(e)
 
-                // Determinar si el error es recuperable con un reintento
-                val isRetryable = when (e) {
-                    is AmiiboError.Network -> true   // Puede mejorar la conexión
-                    is AmiiboError.Parse -> false    // Requiere fix en API/app
-                    is AmiiboError.Database -> true  // Puede liberarse espacio
-                    is AmiiboError.Unknown -> true   // Vale la pena reintentar
+                if (cachedAmiibos.isNotEmpty()) {
+
+                    _uiState.value = AmiiboUiState.Success(
+                        amiibos = cachedAmiibos,
+                        isRefreshing = false
+                    )
+
+
+                    _events.emit(
+                        AmiiboUiEvent.ShowSnackbar(
+                            message = e.message,
+                            showRetry = true
+                        )
+                    )
+                } else {
+
+                    _uiState.value = AmiiboUiState.Error(
+                        message = e.message,
+                        errorType = ErrorType.NETWORK,
+                        isRetryable = true
+                    )
                 }
 
-                _uiState.value = AmiiboUiState.Error(
-                    message = e.message,
-                    errorType = errorType,
-                    isRetryable = isRetryable,
-                    cachedAmiibos = cachedAmiibos
-                )
+
             } catch (e: Exception) {
                 // Catch-all para errores no tipados (no debería llegar aquí)
                 val cachedAmiibos = _loadedAmiibos.value
