@@ -106,7 +106,7 @@ sealed interface AmiiboUiState {
         val message: String,
         val errorType: ErrorType = ErrorType.UNKNOWN,
         val isRetryable: Boolean = true,
-        val cachedAmiibos: List<AmiiboEntity> = emptyList()
+        val cachedAmiibos: List<AmiiboEntity> = emptyList() // UiState update
     ) : AmiiboUiState
 }
 
