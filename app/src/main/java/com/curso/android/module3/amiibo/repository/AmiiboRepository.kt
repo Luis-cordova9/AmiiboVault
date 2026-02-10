@@ -75,8 +75,14 @@ class AmiiboRepository(
      * Cuando llamamos a refreshAmiibos(), Room detecta los cambios
      * y este Flow emite automáticamente la nueva lista.
      */
-    fun observeAmiibos(): Flow<List<AmiiboEntity>> {
-        return amiiboDao.getAllAmiibos()
+
+    // ya no se filtra en la memoria, ahora se busca el flow a devolver
+    fun observeAmiibos(query: String): Flow<List<AmiiboEntity>> {
+        return if (query.isBlank()) {
+            amiiboDao.getAllAmiibos()
+        } else {
+            amiiboDao.searchAmiibos(query)
+        }
     }
 
     /**
