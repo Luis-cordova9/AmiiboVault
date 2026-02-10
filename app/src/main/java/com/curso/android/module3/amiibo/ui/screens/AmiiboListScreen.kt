@@ -76,7 +76,8 @@ import com.curso.android.module3.amiibo.ui.viewmodel.AmiiboViewModel
 import com.curso.android.module3.amiibo.ui.viewmodel.AmiiboUiEvent
 import org.koin.androidx.compose.koinViewModel
 import androidx.compose.material3.SnackbarHostState
-
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.filled.Close
 
 /**
  * ============================================================================
@@ -141,6 +142,7 @@ fun AmiiboListScreen(
      * - uiState se comporta como AmiiboUiState directamente
      * - Sin 'by' sería: uiState.value para acceder
      */
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pageSize by viewModel.pageSize.collectAsStateWithLifecycle()
     val hasMorePages by viewModel.hasMorePages.collectAsStateWithLifecycle()
@@ -296,22 +298,45 @@ fun AmiiboListScreen(
                  *
                  * NOTA: Requiere @OptIn(ExperimentalMaterial3Api::class)
                  */
-                PullToRefreshBox(
-                    isRefreshing = state.isRefreshing,
-                    onRefresh = { viewModel.refreshAmiibos() },
-                    modifier = Modifier.padding(paddingValues)
+
+                Column(
+                    modifier = Modifier
+                        .padding(paddingValues)
+                        .fillMaxSize()
                 ) {
-                    // Grid de Amiibos con paginación
-                    AmiiboGrid(
-                        amiibos = state.amiibos,
-                        onAmiiboClick = onAmiiboClick,
-                        hasMorePages = hasMorePages,
-                        isLoadingMore = isLoadingMore,
-                        paginationError = paginationError,
-                        onLoadMore = { viewModel.loadNextPage() },
-                        onRetryLoadMore = { viewModel.retryLoadMore() },
-                        modifier = Modifier.fillMaxSize()
+
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = viewModel::onSearchQueryChange,
+                        label = { Text("Buscar Amiibo") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear")
+                                }
+                            }
+                        }
                     )
+
+                    PullToRefreshBox(
+                        isRefreshing = state.isRefreshing,
+                        onRefresh = { viewModel.refreshAmiibos() },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        AmiiboGrid(
+                            amiibos = state.amiibos,
+                            onAmiiboClick = onAmiiboClick,
+                            hasMorePages = hasMorePages,
+                            isLoadingMore = isLoadingMore,
+                            paginationError = paginationError,
+                            onLoadMore = { viewModel.loadNextPage() },
+                            onRetryLoadMore = { viewModel.retryLoadMore() },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
 
