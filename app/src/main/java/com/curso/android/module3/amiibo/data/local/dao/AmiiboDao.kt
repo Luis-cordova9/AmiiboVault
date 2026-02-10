@@ -187,6 +187,11 @@ interface AmiiboDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDetail(detail: AmiiboDetailEntity)
+
+    /** Agregar una query reactiva con like */
+    @Query(""" SELECT * FROM amiibos WHERE name LIKE '%' || :query || '%' ORDER BY name ASC """)
+    fun searchAmiibos(query: String): Flow<List<AmiiboEntity>>
+
 }
 
 /**
